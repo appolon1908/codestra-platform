@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand */
+  --color-brand-primary: #0F5EEA;
+  --color-brand-primary-dark: #174EA6;
+  --color-brand-interactive: #3B82F6;
+  --color-brand-surface: #EAF2FF;
+  --color-brand-border: #CFE0FF;
+
+  /* Navigation */
+  --color-nav-background: #071426;
+  --color-nav-sidebar: #0B1D33;
+  --color-nav-selected: #102744;
+  --color-nav-hover: #183A63;
+
+  /* Surfaces */
+  --color-surface-card: #FFFFFF;
+  --color-surface-page: #F7F9FC;
+  --color-surface-muted: #F2F5F9;
+  --color-surface-border: #E5EAF1;
+  --color-surface-border-strong: #D6DEE8;
+
+  /* Text */
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748B;
+  --color-text-disabled: #94A3B8;
+  --color-text-on-dark: #FFFFFF;
+
+  /* Status */
+  --color-status-success: #16A34A;
+  --color-status-success-bg: #DCFCE7;
+  --color-status-warning: #F59E0B;
+  --color-status-warning-bg: #FEF3C7;
+  --color-status-error: #DC2626;
+  --color-status-error-bg: #FEE2E2;
+  --color-status-ai: #7C3AED;
+  --color-status-ai-bg: #F3E8FF;
+
+  /* Call states */
+  --color-call-ready: #16A34A;
+  --color-call-ringing: #F59E0B;
+  --color-call-active: #2563EB;
+  --color-call-hold: #7C3AED;
+  --color-call-end: #DC2626;
+  --color-call-offline: #64748B;
+
+  /* Spacing scale (4/8/12/16/24/32/40/48) */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, .08);
+  --shadow-floating: 0 8px 24px rgba(15, 23, 42, .12);
+
+  /* Typography */
+  --font-sans: "Inter", "Manrope", "IBM Plex Sans", system-ui, sans-serif;
+  --text-display: 32px;
+  --text-display--line-height: 40px;
+  --text-page-title: 24px;
+  --text-page-title--line-height: 32px;
+  --text-section-title: 18px;
+  --text-section-title--line-height: 26px;
+  --text-card-title: 16px;
+  --text-card-title--line-height: 24px;
+  --text-body: 14px;
+  --text-body--line-height: 22px;
+  --text-small: 12px;
+  --text-small--line-height: 18px;
+  --text-label: 12px;
+  --text-label--line-height: 16px;
+  --text-button: 14px;
+  --text-button--line-height: 20px;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-surface-page);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+  }
+}
