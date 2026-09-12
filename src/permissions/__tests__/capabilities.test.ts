@@ -1,49 +1,111 @@
 import { describe, expect, it } from 'vitest'
-import { can, canAny } from '../capabilities'
+import { resolveCapabilities } from '../capabilities'
+import type { Session } from '@/auth/AuthContext'
 
-describe('role capability matrix', () => {
-  it('keeps agents scoped to their workspace only', () => {
-    expect(can('agent', 'workspace.telephony')).toBe(true)
-    expect(can('agent', 'workspace.crm')).toBe(true)
-    expect(can('agent', 'tenant.billing')).toBe(false)
-    expect(can('agent', 'tenant.integrations')).toBe(false)
-    expect(can('agent', 'platform.tenants')).toBe(false)
-    expect(can('agent', 'platform.provisioning')).toBe(false)
+const SMITH = { tenantId: 'smith-transport', tenantName: 'Smith Transport' }
+const TRANSPORTATION = { campaignId: 'transportation', campaignName: 'Transportation', tenantId: SMITH.tenantId }
+const STUDENT_REPAYMENT = { campaignId: 'student-repayment', campaignName: 'Student Repayment', tenantId: SMITH.tenantId }
+
+function session(overrides: Partial<Session>): Session {
+  return {
+    userId: 'u1',
+    name: 'Test User',
+    email: 'test@example.com',
+    platformRole: 'none',
+    tenantMemberships: [],
+    campaignMemberships: [],
+    activeTenantId: null,
+    activeCampaignId: null,
+    ...overrides,
+  }
+}
+
+describe('resolveCapabilities — three independent scopes, not one inheritance chain', () => {
+  it('grants an agent only their campaign-scoped capabilities', () => {
+    const s = session({
+      tenantMemberships: [{ ...SMITH, role: 'member' }],
+      campaignMemberships: [{ ...TRANSPORTATION, role: 'agent' }],
+      activeTenantId: SMITH.tenantId,
+      activeCampaignId: TRANSPORTATION.campaignId,
+    })
+    const caps = resolveCapabilities(s, s.activeTenantId, s.activeCampaignId)
+    expect(caps.has('calls.answer')).toBe(true)
+    expect(caps.has('calls.monitor')).toBe(false)
+    expect(caps.has('tenant.billing.manage')).toBe(false)
   })
 
-  it('lets supervisors manage their team and queues but not tenant billing', () => {
-    expect(can('supervisor', 'team.manage')).toBe(true)
-    expect(can('supervisor', 'queue.manage')).toBe(true)
-    expect(can('supervisor', 'tenant.billing')).toBe(false)
+  it('does NOT grant a tenant_admin any campaign-scoped capability without an actual campaign membership', () => {
+    const s = session({
+      tenantMemberships: [{ ...SMITH, role: 'tenant_admin' }],
+      campaignMemberships: [],
+      activeTenantId: SMITH.tenantId,
+      activeCampaignId: null,
+    })
+    const caps = resolveCapabilities(s, s.activeTenantId, s.activeCampaignId)
+    expect(caps.has('tenant.users.manage')).toBe(true)
+    expect(caps.has('calls.monitor')).toBe(false)
+    expect(caps.has('calls.whisper')).toBe(false)
+    expect(caps.has('calls.barge')).toBe(false)
+    expect(caps.has('qa.score')).toBe(false)
   })
 
-  it('scopes tenant admins to their own tenant, never cross-tenant platform controls', () => {
-    expect(can('tenant_admin', 'tenant.users')).toBe(true)
-    expect(can('tenant_admin', 'tenant.billing')).toBe(true)
-    expect(can('tenant_admin', 'tenant.integrations')).toBe(true)
-    expect(can('tenant_admin', 'platform.tenants')).toBe(false)
-    expect(can('tenant_admin', 'platform.odoo_mapping')).toBe(false)
-    expect(can('tenant_admin', 'platform.security')).toBe(false)
+  it('grants supervisor capabilities only for the active campaign, isolating a second campaign in the same tenant', () => {
+    const s = session({
+      tenantMemberships: [{ ...SMITH, role: 'tenant_admin' }],
+      campaignMemberships: [{ ...TRANSPORTATION, role: 'supervisor' }],
+      activeTenantId: SMITH.tenantId,
+      activeCampaignId: TRANSPORTATION.campaignId,
+    })
+    const capsInTransportation = resolveCapabilities(s, s.activeTenantId, s.activeCampaignId)
+    expect(capsInTransportation.has('calls.monitor')).toBe(true)
+    expect(capsInTransportation.has('calls.barge')).toBe(true)
+
+    // Same person, no membership at all in Student Repayment — switching the
+    // active campaign must strip the campaign-scoped grants immediately.
+    const capsInStudentRepayment = resolveCapabilities(s, s.activeTenantId, STUDENT_REPAYMENT.campaignId)
+    expect(capsInStudentRepayment.has('calls.monitor')).toBe(false)
+    expect(capsInStudentRepayment.has('calls.barge')).toBe(false)
+    expect(capsInStudentRepayment.has('calls.answer')).toBe(false)
+    // Tenant-scoped grants are unaffected by the campaign switch.
+    expect(capsInStudentRepayment.has('tenant.users.manage')).toBe(true)
   })
 
-  it('gives platform operators cross-tenant operational access without billing or security', () => {
-    expect(can('platform_operator', 'platform.tenants')).toBe(true)
-    expect(can('platform_operator', 'platform.telephony')).toBe(true)
-    expect(can('platform_operator', 'platform.communications')).toBe(true)
-    expect(can('platform_operator', 'platform.billing')).toBe(false)
-    expect(can('platform_operator', 'platform.security')).toBe(false)
-    expect(can('platform_operator', 'platform.provisioning')).toBe(false)
+  it('gives platform operators cross-tenant read/ops access without billing or security authority', () => {
+    const s = session({ platformRole: 'platform_operator' })
+    const caps = resolveCapabilities(s, null, null)
+    expect(caps.has('platform.operations.read')).toBe(true)
+    expect(caps.has('platform.tenants.read')).toBe(true)
+    expect(caps.has('platform.tenants.manage')).toBe(false)
+    expect(caps.has('platform.billing.manage')).toBe(false)
+    expect(caps.has('platform.security.manage')).toBe(false)
+    expect(caps.has('platform.provisioning.manage')).toBe(false)
   })
 
-  it('gives platform admins the full capability set', () => {
-    expect(can('platform_admin', 'platform.billing')).toBe(true)
-    expect(can('platform_admin', 'platform.odoo_mapping')).toBe(true)
-    expect(can('platform_admin', 'platform.security')).toBe(true)
-    expect(can('platform_admin', 'platform.provisioning')).toBe(true)
+  it('gives platform admins the full platform-scope capability set', () => {
+    const s = session({ platformRole: 'platform_admin' })
+    const caps = resolveCapabilities(s, null, null)
+    expect(caps.has('platform.tenants.manage')).toBe(true)
+    expect(caps.has('platform.billing.manage')).toBe(true)
+    expect(caps.has('platform.security.manage')).toBe(true)
+    expect(caps.has('platform.provisioning.manage')).toBe(true)
   })
 
-  it('canAny returns true when the role holds at least one of the listed capabilities', () => {
-    expect(canAny('agent', ['tenant.billing', 'workspace.telephony'])).toBe(true)
-    expect(canAny('agent', ['tenant.billing', 'platform.security'])).toBe(false)
+  it('lets a platform admin administer a tenant only after explicitly entering that tenant context', () => {
+    const s = session({ platformRole: 'platform_admin' })
+    const before = resolveCapabilities(s, null, null)
+    expect(before.has('tenant.users.manage')).toBe(false)
+
+    const after = resolveCapabilities(s, 'ridgeline-logistics', null)
+    expect(after.has('tenant.users.manage')).toBe(true)
+  })
+
+  it('never grants tenant-admin capabilities to a platform_operator entering a tenant id', () => {
+    const s = session({ platformRole: 'platform_operator' })
+    const caps = resolveCapabilities(s, 'ridgeline-logistics', null)
+    expect(caps.has('tenant.users.manage')).toBe(false)
+  })
+
+  it('returns no capabilities for a signed-out session', () => {
+    expect(resolveCapabilities(null, null, null).size).toBe(0)
   })
 })
