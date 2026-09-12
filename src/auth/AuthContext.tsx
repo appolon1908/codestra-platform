@@ -1,19 +1,23 @@
 import { type ReactNode, createContext, useContext, useMemo, useState } from 'react'
-import type { Role } from '@/permissions/roles'
+import type { CampaignMembership, PlatformRole, TenantMembership } from '@/permissions/roles'
 
 export interface Session {
   userId: string
   name: string
   email: string
-  role: Role
-  tenantId: string | null
-  tenantName: string | null
+  platformRole: PlatformRole
+  tenantMemberships: TenantMembership[]
+  campaignMemberships: CampaignMembership[]
+  activeTenantId: string | null
+  activeCampaignId: string | null
 }
 
 interface AuthContextValue {
   session: Session | null
   signIn: (session: Session) => void
   signOut: () => void
+  setActiveTenant: (tenantId: string | null) => void
+  setActiveCampaign: (campaignId: string | null) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -29,6 +33,16 @@ function readStoredSession(): Session | null {
   }
 }
 
+function persist(session: Session | null) {
+  try {
+    if (session) sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
+    else sessionStorage.removeItem(SESSION_STORAGE_KEY)
+  } catch {
+    // sessionStorage may be unavailable (private browsing); auth still
+    // works for the lifetime of this tab via in-memory state.
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(() => readStoredSession())
 
@@ -37,20 +51,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       signIn: (next) => {
         setSession(next)
-        try {
-          sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next))
-        } catch {
-          // sessionStorage may be unavailable (private browsing); auth still
-          // works for the lifetime of this tab via in-memory state.
-        }
+        persist(next)
       },
       signOut: () => {
         setSession(null)
-        try {
-          sessionStorage.removeItem(SESSION_STORAGE_KEY)
-        } catch {
-          // ignore
-        }
+        persist(null)
+      },
+      setActiveTenant: (tenantId) => {
+        setSession((prev) => {
+          if (!prev) return prev
+          // Switching tenant invalidates any previously active campaign —
+          // it belonged to the old tenant's membership set.
+          const stillValidCampaign = prev.campaignMemberships.find(
+            (m) => m.campaignId === prev.activeCampaignId && m.tenantId === tenantId,
+          )
+          const next: Session = {
+            ...prev,
+            activeTenantId: tenantId,
+            activeCampaignId: stillValidCampaign ? prev.activeCampaignId : null,
+          }
+          persist(next)
+          return next
+        })
+      },
+      setActiveCampaign: (campaignId) => {
+        setSession((prev) => {
+          if (!prev) return prev
+          const next: Session = { ...prev, activeCampaignId: campaignId }
+          persist(next)
+          return next
+        })
       },
     }),
     [session],

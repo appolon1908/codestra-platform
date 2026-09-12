@@ -1,12 +1,10 @@
-import { type FormEvent, useState } from 'react'
+import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/core/Button'
-import { Input } from '@/components/form/Input'
 import { Select } from '@/components/form/Select'
 import { Card, CardTitle } from '@/components/container/Card'
-import { ROLES, ROLE_LABELS } from '@/permissions/roles'
-import type { Role } from '@/permissions/roles'
-import { ROLE_HOME_PATH } from '@/app/nav'
+import { deriveHomePath } from '@/app/nav'
+import { DEMO_PERSONAS } from './demoPersonas'
 import { useAuth } from './AuthContext'
 
 interface LocationState {
@@ -17,55 +15,42 @@ export function SignInPage() {
   const { session, signIn } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [email, setEmail] = useState('')
-  const [role, setRole] = useState<Role>('agent')
+  const [personaId, setPersonaId] = useState(DEMO_PERSONAS[0].id)
 
   if (session) {
     const state = location.state as LocationState | null
-    return <Navigate to={state?.from?.pathname ?? ROLE_HOME_PATH[session.role]} replace />
+    return <Navigate to={state?.from?.pathname ?? deriveHomePath(session)} replace />
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!email) return
-    signIn({
-      userId: 'demo-user',
-      name: email.split('@')[0] ?? 'User',
-      email,
-      role,
-      tenantId: role === 'platform_operator' || role === 'platform_admin' ? null : 'demo-tenant',
-      tenantName: role === 'platform_operator' || role === 'platform_admin' ? null : 'Acme Co',
-    })
-    navigate(ROLE_HOME_PATH[role], { replace: true })
+  const persona = DEMO_PERSONAS.find((p) => p.id === personaId) ?? DEMO_PERSONAS[0]
+
+  function handleSignIn() {
+    signIn(persona.session)
+    navigate(deriveHomePath(persona.session), { replace: true })
   }
 
   return (
     <div className="flex h-screen items-center justify-center bg-[var(--color-nav-background)] p-6">
-      <Card className="w-full max-w-sm" padding="md">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <Card className="w-full max-w-md" padding="md">
+        <div className="flex flex-col gap-4">
           <CardTitle>Sign in to Codestra</CardTitle>
+          <p className="text-[length:var(--text-body)] text-[var(--color-text-muted)]">
+            Demo sign-in — pick a persona to exercise platform/tenant/campaign scopes independently. A real
+            deployment authenticates through Keycloak and derives this from Odoo membership records.
+          </p>
           <label className="flex flex-col gap-1 text-[length:var(--text-label)] font-medium text-[var(--color-text-secondary)]">
-            Email
-            <Input
-              type="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-[length:var(--text-label)] font-medium text-[var(--color-text-secondary)]">
-            Role
+            Persona
             <Select
-              value={role}
-              onValueChange={(next) => setRole(next as Role)}
-              options={ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+              value={personaId}
+              onValueChange={setPersonaId}
+              options={DEMO_PERSONAS.map((p) => ({ value: p.id, label: p.label }))}
             />
           </label>
-          <Button type="submit" size="lg">
+          <p className="text-[length:var(--text-small)] text-[var(--color-text-muted)]">{persona.description}</p>
+          <Button size="lg" onClick={handleSignIn}>
             Sign in
           </Button>
-        </form>
+        </div>
       </Card>
     </div>
   )
