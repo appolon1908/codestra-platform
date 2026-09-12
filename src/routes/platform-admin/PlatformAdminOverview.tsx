@@ -2,10 +2,12 @@ import { MetricCard } from '@/components/data/MetricCard'
 import { Card, CardTitle } from '@/components/container/Card'
 import { InlineAlert } from '@/components/feedback/InlineAlert'
 
-export function PlatformAdminDashboard() {
+export function PlatformAdminOverview() {
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-[length:var(--text-page-title)] font-semibold text-[var(--color-text-primary)]">Platform overview</h1>
+      <h1 className="text-[length:var(--text-page-title)] font-semibold text-[var(--color-text-primary)]">
+        Platform overview
+      </h1>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard label="Total tenants" value={47} />
@@ -30,7 +32,7 @@ export function PlatformAdminDashboard() {
         <Card className="col-span-12 lg:col-span-4">
           <CardTitle>Recent jobs</CardTitle>
           <p className="mt-2 text-[length:var(--text-body)] text-[var(--color-text-secondary)]">
-            2 failed in the last 24 hours. View the Monitoring → Jobs page for detail.
+            2 failed in the last 24 hours. See Monitoring → Jobs for detail.
           </p>
         </Card>
       </div>

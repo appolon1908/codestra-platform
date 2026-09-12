@@ -1,35 +1,37 @@
-import { NavLink } from 'react-router-dom'
-import { useAuth } from '@/auth/AuthContext'
+import { NavLink, useLocation } from 'react-router-dom'
 import { usePermission } from '@/permissions/usePermission'
 import { cn } from '@/lib/cn'
-import { NAV_BY_ROLE } from './nav'
+import { NAV_BY_SURFACE, surfaceForPath } from './nav'
 
 export function Sidebar() {
-  const { session } = useAuth()
+  const location = useLocation()
   const { can } = usePermission()
-  if (!session) return null
+  const surface = surfaceForPath(location.pathname)
+  if (!surface) return null
 
-  const groups = NAV_BY_ROLE[session.role]
+  const groups = NAV_BY_SURFACE[surface]
+  const firstPath = groups[0]?.items[0]?.path
 
   return (
     <nav
       aria-label="Primary"
       className="flex h-full w-[220px] shrink-0 flex-col gap-4 overflow-y-auto bg-[var(--color-nav-sidebar)] p-3"
     >
-      {groups.map((group, index) => (
-        <div key={group.label ?? index} className="flex flex-col gap-1">
-          {group.label && (
-            <span className="px-2 pb-1 text-[length:var(--text-label)] font-medium uppercase tracking-wide text-[var(--color-text-disabled)]">
-              {group.label}
-            </span>
-          )}
-          {group.items
-            .filter((item) => !item.capability || can(item.capability))
-            .map((item) => (
+      {groups.map((group, index) => {
+        const visibleItems = group.items.filter((item) => !item.capability || can(item.capability))
+        if (visibleItems.length === 0) return null
+        return (
+          <div key={group.label ?? index} className="flex flex-col gap-1">
+            {group.label && (
+              <span className="px-2 pb-1 text-[length:var(--text-label)] font-medium uppercase tracking-wide text-[var(--color-text-disabled)]">
+                {group.label}
+              </span>
+            )}
+            {visibleItems.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
-                end={item.path === NAV_BY_ROLE[session.role][0]?.items[0]?.path}
+                end={item.path === firstPath}
                 className={({ isActive }) =>
                   cn(
                     'rounded-[var(--radius-sm)] px-3 py-2 text-[length:var(--text-body)] text-[var(--color-text-on-dark)] opacity-80 transition-colors hover:bg-[var(--color-nav-hover)] hover:opacity-100',
@@ -40,8 +42,9 @@ export function Sidebar() {
                 {item.label}
               </NavLink>
             ))}
-        </div>
-      ))}
+          </div>
+        )
+      })}
     </nav>
   )
 }

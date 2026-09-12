@@ -1,19 +1,22 @@
 import { MetricCard } from '@/components/data/MetricCard'
 import { Card, CardTitle } from '@/components/container/Card'
 import { Badge } from '@/components/status/Badge'
-import { useAuth } from '@/auth/AuthContext'
+import { StatePanel } from '@/components/feedback/StatePanel'
+import { usePermission } from '@/permissions/usePermission'
 
-export function TenantAdminDashboard() {
-  const { session } = useAuth()
+export function TenantAdminOverview() {
+  const { activeTenantName } = usePermission()
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[length:var(--text-page-title)] font-semibold text-[var(--color-text-primary)]">
-            {session?.tenantName ?? 'Your organization'}
+            {activeTenantName ?? 'Your organization'}
           </h1>
-          <p className="text-[length:var(--text-body)] text-[var(--color-text-muted)]">Plan: Growth · Environment: Production</p>
+          <p className="text-[length:var(--text-body)] text-[var(--color-text-muted)]">
+            Plan: Growth · Environment: Production
+          </p>
         </div>
         <Badge status="success">Billing current</Badge>
       </div>
@@ -34,9 +37,12 @@ export function TenantAdminDashboard() {
         </Card>
         <Card className="col-span-12 lg:col-span-6">
           <CardTitle>Monthly usage</CardTitle>
-          <p className="mt-2 text-[length:var(--text-body)] text-[var(--color-text-secondary)]">
-            18,204 of 25,000 included minutes used (73%).
-          </p>
+          <div className="mt-2">
+            <StatePanel
+              state="stale-data"
+              description="Usage figures last refreshed 6 hours ago — the billing sync worker is behind."
+            />
+          </div>
         </Card>
       </div>
     </div>
