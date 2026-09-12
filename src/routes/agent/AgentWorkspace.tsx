@@ -19,11 +19,24 @@ import { Badge } from '@/components/status/Badge'
 import { Textarea } from '@/components/form/Textarea'
 import { TimelineItem } from '@/components/data/TimelineItem'
 import { Tabs, TabPanel } from '@/components/navigation/Tabs'
+import { StatePanel } from '@/components/feedback/StatePanel'
 import { usePermission } from '@/permissions/usePermission'
+import { fetchActivity } from '@/lib/api/activity'
+import { useApiResource } from '@/lib/api/useApiResource'
+import { isRealApiModeEnabled } from '@/lib/api/config'
+
+function activitySourceFor(source: string): 'call' | 'sms' | 'email' | 'crm' | 'system' {
+  if (source.includes('call') || source === 'audit_event') return 'call'
+  if (source.includes('email')) return 'email'
+  if (source.includes('sms')) return 'sms'
+  return 'system'
+}
 
 export function AgentWorkspace() {
-  const { activeTenantName, activeCampaign } = usePermission()
+  const { activeTenantName, activeCampaign, activeTenant } = usePermission()
   const [available, setAvailable] = useState(true)
+  const realMode = isRealApiModeEnabled()
+  const activity = useApiResource(() => fetchActivity({ tenantId: activeTenant?.tenantId }), [activeTenant?.tenantId])
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,6 +65,12 @@ export function AgentWorkspace() {
             <span className="text-[length:var(--text-body)] text-[var(--color-text-muted)]">No active call</span>
             <span className="text-[length:var(--text-small)] text-[var(--color-text-disabled)]">00:00</span>
           </div>
+          {realMode && (
+            <p className="text-[length:var(--text-small)] text-[var(--color-text-muted)]">
+              Live call state isn't wired yet — Middleware's calls API has no verified per-agent filter, so this
+              panel can't safely show only this agent's call.
+            </p>
+          )}
 
           <div className="grid grid-cols-3 gap-2">
             <IconButton label="Mute" variant="secondary">
@@ -88,9 +107,17 @@ export function AgentWorkspace() {
           </label>
         </Card>
 
-        {/* Center column — Odoo CRM */}
+        {/* Center column — Odoo CRM.
+            Deliberately still mock data: Odoo's CRM API (codestra_middleware_bridge)
+            is HMAC-signed with a server-held secret and must never be called
+            directly from a browser. No safe browser-facing proxy for it exists
+            in Middleware yet — wiring this panel for real needs that proxy
+            built first, not a client-side signer. */}
         <Card className="col-span-12 flex flex-col gap-3 lg:col-span-5">
-          <CardTitle>Customer</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Customer</CardTitle>
+            {realMode && <Badge status="neutral">Demo data</Badge>}
+          </div>
           <div className="flex flex-col gap-1">
             <span className="text-[length:var(--text-card-title)] font-semibold text-[var(--color-text-primary)]">
               John Smith
@@ -194,21 +221,41 @@ export function AgentWorkspace() {
 
         <Card className="col-span-12 flex flex-col gap-1 lg:col-span-8">
           <CardTitle>Recent Activity</CardTitle>
-          <TimelineItem
-            icon={<Phone className="size-4" aria-hidden="true" />}
-            timestamp="10:42 AM"
-            title="Call completed"
-            source="call"
-            actor="Alex Rivera"
-            metadata="4m 12s · Outcome: Interested"
-          />
-          <TimelineItem
-            icon={<Mail className="size-4" aria-hidden="true" />}
-            timestamp="Yesterday"
-            title="Renewal quote sent"
-            source="email"
-            actor="Alex Rivera"
-          />
+          {realMode && activity.status === 'loading' && <StatePanel state="loading" />}
+          {realMode && activity.status === 'unavailable' && (
+            <StatePanel state="stale-data" description="Live activity could not be fetched. Showing recent demo activity." />
+          )}
+          {realMode && activity.status === 'ready' && activity.data.items.length > 0
+            ? activity.data.items.map((item) => (
+                <TimelineItem
+                  key={item.id}
+                  icon={<Phone className="size-4" aria-hidden="true" />}
+                  timestamp={new Date(item.occurred_at).toLocaleString()}
+                  title={item.title}
+                  source={activitySourceFor(item.source)}
+                  actor={item.actor ?? undefined}
+                  metadata={item.metadata ?? undefined}
+                />
+              ))
+            : (!realMode || activity.status !== 'loading') && (
+                <>
+                  <TimelineItem
+                    icon={<Phone className="size-4" aria-hidden="true" />}
+                    timestamp="10:42 AM"
+                    title="Call completed"
+                    source="call"
+                    actor="Alex Rivera"
+                    metadata="4m 12s · Outcome: Interested"
+                  />
+                  <TimelineItem
+                    icon={<Mail className="size-4" aria-hidden="true" />}
+                    timestamp="Yesterday"
+                    title="Renewal quote sent"
+                    source="email"
+                    actor="Alex Rivera"
+                  />
+                </>
+              )}
         </Card>
       </div>
     </div>

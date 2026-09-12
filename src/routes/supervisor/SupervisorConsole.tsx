@@ -6,6 +6,11 @@ import { StatusPill, type CallState } from '@/components/status/StatusPill'
 import { IconButton } from '@/components/core/IconButton'
 import { StatePanel } from '@/components/feedback/StatePanel'
 import { usePermission } from '@/permissions/usePermission'
+import { fetchCalls } from '@/lib/api/calls'
+import { fetchAgentsPresence } from '@/lib/api/presence'
+import { fetchQueueMetrics } from '@/lib/api/queues'
+import { useApiResource } from '@/lib/api/useApiResource'
+import { isRealApiModeEnabled } from '@/lib/api/config'
 
 interface LiveCallRow {
   id: string
@@ -27,28 +32,95 @@ const LIVE_CALLS_BY_CAMPAIGN: Record<string, LiveCallRow[]> = {
   ],
 }
 
+/** Middleware's `lifecycle_state` vocabulary mapped to this UI's coarser CallState. */
+function toCallState(lifecycleState: string): CallState {
+  switch (lifecycleState) {
+    case 'connected':
+    case 'answering':
+      return 'active'
+    case 'held':
+      return 'hold'
+    case 'offered':
+    case 'ringing':
+    case 'initiating':
+      return 'ready'
+    default:
+      return 'ready'
+  }
+}
+
+function elapsedSince(startedAt: string | null): string {
+  if (!startedAt) return '00:00'
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000))
+  const minutes = Math.floor(seconds / 60)
+  const remainder = seconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+}
+
 export function SupervisorConsole() {
-  const { activeCampaign, can } = usePermission()
+  const { activeCampaign, activeTenant, can } = usePermission()
+  const realMode = isRealApiModeEnabled()
+
+  const calls = useApiResource(() => fetchCalls({ tenantId: activeTenant?.tenantId }), [activeTenant?.tenantId])
+  const presence = useApiResource(() => fetchAgentsPresence({ tenantId: activeTenant?.tenantId }), [activeTenant?.tenantId])
+  // No queue-id concept exists yet in the permission model — the active
+  // campaign id is used as a stand-in until one does; this is a documented
+  // assumption, not a verified mapping.
+  const metrics = useApiResource(
+    () => fetchQueueMetrics(activeCampaign?.campaignId ?? ''),
+    [activeCampaign?.campaignId],
+  )
 
   if (!activeCampaign) {
     return <StatePanel state="empty" title="No campaign selected" description="Select a campaign to see live activity." />
   }
 
-  const rows = LIVE_CALLS_BY_CAMPAIGN[activeCampaign.campaignId] ?? []
   const canMonitor = can('calls.monitor')
   const canWhisper = can('calls.whisper')
   const canBarge = can('calls.barge')
 
+  const usingRealCalls = realMode && calls.status === 'ready'
+  const presenceByAgent = new Map(
+    presence.status === 'ready' ? presence.data.items.map((row) => [row.agent_id, row.state]) : [],
+  )
+  const rows: LiveCallRow[] = usingRealCalls
+    ? calls.data.items.map((call) => ({
+        id: call.call_id,
+        agent: call.source_extension ?? '—',
+        customer: call.destination ?? '—',
+        duration: elapsedSince(call.connected_at ?? call.started_at),
+        state: presenceByAgent.get(call.source_extension ?? '') === 'busy' ? 'active' : toCallState(call.lifecycle_state),
+      }))
+    : (LIVE_CALLS_BY_CAMPAIGN[activeCampaign.campaignId] ?? [])
+
+  const m = metrics.status === 'ready' ? metrics.data : undefined
+  const activeCount = rows.filter((r) => r.state === 'active').length
+
   return (
     <div className="flex flex-col gap-6">
+      {realMode && (calls.status === 'unavailable' || presence.status === 'unavailable') && (
+        <StatePanel
+          state="stale-data"
+          description="Live call/presence data could not be fetched. Showing the last known activity."
+        />
+      )}
+
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-7">
-        <MetricCard label="Agents online" value={14} />
-        <MetricCard label="Active calls" value={rows.filter((r) => r.state === 'active').length} />
-        <MetricCard label="Waiting" value={3} />
-        <MetricCard label="Service level" value="82%" trend={{ direction: 'up', label: '+2pts' }} />
-        <MetricCard label="ASA" value="14s" />
-        <MetricCard label="Abandonment" value="2.1%" trend={{ direction: 'down', label: '-0.3pts' }} />
-        <MetricCard label="AHT" value="4:18" />
+        <MetricCard label="Agents online" value={m?.agents_online ?? 14} />
+        <MetricCard label="Active calls" value={m?.active_calls ?? activeCount} />
+        <MetricCard label="Waiting" value={m?.waiting ?? 3} />
+        <MetricCard
+          label="Service level"
+          value={m?.service_level_pct !== undefined ? `${m.service_level_pct}%` : '82%'}
+          trend={{ direction: 'up', label: '+2pts' }}
+        />
+        <MetricCard label="ASA" value={m?.asa_seconds !== undefined ? `${m.asa_seconds}s` : '14s'} />
+        <MetricCard
+          label="Abandonment"
+          value={m?.abandonment_pct !== undefined ? `${m.abandonment_pct}%` : '2.1%'}
+          trend={{ direction: 'down', label: '-0.3pts' }}
+        />
+        <MetricCard label="AHT" value={m?.aht_seconds !== undefined ? `${Math.floor(m.aht_seconds / 60)}:${String(m.aht_seconds % 60).padStart(2, '0')}` : '4:18'} />
       </div>
 
       <Card>
