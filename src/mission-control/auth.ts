@@ -1,4 +1,5 @@
-const TOKEN='mission-control.access-token',VERIFIER='mission-control.pkce-verifier'
+const TOKEN='mission-control.access-token',VERIFIER='mission-control.pkce-verifier',RETURN_URL='mission-control.return-url'
+let exchangePromise:Promise<string>|null=null
 const required=()=>import.meta.env.VITE_MC_AUTH_REQUIRED==='true'
 const issuer=()=>String(import.meta.env.VITE_MC_OIDC_ISSUER||'').replace(/\/$/,'')
 const clientId=()=>import.meta.env.VITE_MC_OIDC_CLIENT_ID||'mission-control-ui'
@@ -13,20 +14,26 @@ export function accessToken(){const t=sessionStorage.getItem(TOKEN);if(!t)return
 export async function beginLogin(){
  if(!required())return
  if(!issuer())throw new Error('VITE_MC_OIDC_ISSUER is required')
- const v=random();sessionStorage.setItem(VERIFIER,v)
+ const v=random();sessionStorage.setItem(VERIFIER,v);sessionStorage.setItem(RETURN_URL,window.location.pathname+window.location.search+window.location.hash)
  const q=new URLSearchParams({client_id:clientId(),redirect_uri:redirectUri(),response_type:'code',scope:'openid profile email',code_challenge:await challenge(v),code_challenge_method:'S256'})
  window.location.assign(issuer()+'/protocol/openid-connect/auth?'+q)
 }
 export async function completeLogin(){
  if(!required())return null
  const q=new URLSearchParams(window.location.search),code=q.get('code');if(!code)return accessToken()
- const v=sessionStorage.getItem(VERIFIER);if(!v)throw new Error('PKCE verifier missing')
- const body=new URLSearchParams({grant_type:'authorization_code',client_id:clientId(),redirect_uri:redirectUri(),code,code_verifier:v})
- const res=await fetch(issuer()+'/protocol/openid-connect/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body})
- if(!res.ok)throw new Error('OIDC token exchange failed')
- const x=await res.json();sessionStorage.setItem(TOKEN,x.access_token);sessionStorage.removeItem(VERIFIER)
- const clean=new URL(window.location.href);clean.searchParams.delete('code');clean.searchParams.delete('session_state');clean.searchParams.delete('iss');window.history.replaceState({},'',clean)
- return x.access_token as string
+ if(exchangePromise)return exchangePromise
+ exchangePromise=(async()=>{
+  const v=sessionStorage.getItem(VERIFIER);if(!v)throw new Error('PKCE verifier missing')
+  const body=new URLSearchParams({grant_type:'authorization_code',client_id:clientId(),redirect_uri:redirectUri(),code,code_verifier:v})
+  const res=await fetch(issuer()+'/protocol/openid-connect/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body})
+  if(!res.ok)throw new Error('OIDC token exchange failed')
+  const x=await res.json();sessionStorage.setItem(TOKEN,x.access_token);sessionStorage.removeItem(VERIFIER)
+  const saved=sessionStorage.getItem(RETURN_URL);sessionStorage.removeItem(RETURN_URL)
+  const clean=saved&&saved.startsWith('/')?saved:'/mission-control'
+  window.history.replaceState({},'',clean)
+  return x.access_token as string
+ })()
+ try{return await exchangePromise}finally{exchangePromise=null}
 }
 export async function ensureAccessToken(){const t=await completeLogin();if(required()&&!t){await beginLogin();throw new Error('redirecting_to_login')}return t}
 export function missionRoles(){const t=accessToken();if(!t)return required()?[]:['Administrator'];const p=payload(t);return [...new Set([...(p?.realm_access?.roles||[]),...(p?.resource_access?.['mission-control']?.roles||[])])] as string[]}
