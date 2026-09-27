@@ -1,0 +1,1 @@
+declare const __MISSION_CONTROL_BUILD_SHA__: string
