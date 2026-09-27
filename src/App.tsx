@@ -12,6 +12,7 @@ import { PlatformOperatorOverview } from '@/routes/platform-operator/PlatformOpe
 import { PlatformAdminOverview } from '@/routes/platform-admin/PlatformAdminOverview'
 import { PlatformAdminTenants } from '@/routes/platform-admin/PlatformAdminTenants'
 import { NotAuthorized } from '@/routes/NotAuthorized'
+import { MissionControl } from '@/routes/MissionControl'
 
 function RootRedirect() {
   const { session } = useAuth()
@@ -21,6 +22,7 @@ function RootRedirect() {
 function AppRoutes() {
   return (
     <Routes>
+      <Route path="/mission-control" element={<MissionControl />} />
       <Route path="/sign-in" element={<SignInPage />} />
       <Route path="/not-authorized" element={<NotAuthorized />} />
 
