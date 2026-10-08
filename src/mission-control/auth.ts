@@ -1,6 +1,6 @@
 const TOKEN='mission-control.access-token',VERIFIER='mission-control.pkce-verifier',RETURN_URL='mission-control.return-url'
 let exchangePromise:Promise<string>|null=null
-const required=()=>import.meta.env.VITE_MC_AUTH_REQUIRED==='true'
+const required=()=>import.meta.env.VITE_MC_AUTH_REQUIRED!=='false'
 const issuer=()=>String(import.meta.env.VITE_MC_OIDC_ISSUER||'').replace(/\/$/,'')
 const clientId=()=>import.meta.env.VITE_MC_OIDC_CLIENT_ID||'mission-control-ui'
 const redirectUri=()=>window.location.origin+'/mission-control'
