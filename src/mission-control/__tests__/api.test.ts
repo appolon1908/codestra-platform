@@ -37,3 +37,8 @@ describe('Mission Control API boundary', () => {
     expect(missionWebSocketUrl()).toBeNull()
   })
 })
+
+it('requests the Keycloak dashboard.read scope required by staging Kong', async () => {
+  const { MISSION_CONTROL_OIDC_SCOPE } = await vi.importActual<typeof import('../auth')>('../auth')
+  expect(MISSION_CONTROL_OIDC_SCOPE.split(' ')).toContain('dashboard.read')
+})

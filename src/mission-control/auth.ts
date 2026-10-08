@@ -1,3 +1,4 @@
+export const MISSION_CONTROL_OIDC_SCOPE='openid profile email dashboard.read'
 const TOKEN='mission-control.access-token',VERIFIER='mission-control.pkce-verifier',RETURN_URL='mission-control.return-url'
 let exchangePromise:Promise<string>|null=null
 const required=()=>import.meta.env.VITE_MC_AUTH_REQUIRED!=='false'
@@ -15,7 +16,7 @@ export async function beginLogin(){
  if(!required())return
  if(!issuer())throw new Error('VITE_MC_OIDC_ISSUER is required')
  const v=random();sessionStorage.setItem(VERIFIER,v);sessionStorage.setItem(RETURN_URL,window.location.pathname+window.location.search+window.location.hash)
- const q=new URLSearchParams({client_id:clientId(),redirect_uri:redirectUri(),response_type:'code',scope:'openid profile email',code_challenge:await challenge(v),code_challenge_method:'S256'})
+ const q=new URLSearchParams({client_id:clientId(),redirect_uri:redirectUri(),response_type:'code',scope:MISSION_CONTROL_OIDC_SCOPE,code_challenge:await challenge(v),code_challenge_method:'S256'})
  window.location.assign(issuer()+'/protocol/openid-connect/auth?'+q)
 }
 export async function completeLogin(){
