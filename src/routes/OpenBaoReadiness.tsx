@@ -21,6 +21,9 @@ type Snapshot = {
   release_certification: 'NOT_CHECKED'
   mode: 'READ_ONLY'
 }
+type HealthStatus =
+  | { state: 'OBSERVED'; initialized: boolean; sealed: boolean; standby: boolean | null; http_status: number; observed_at: string }
+  | { state: 'NOT_CONFIGURED' | 'CONFIG_REJECTED' | 'UNAVAILABLE' | 'INVALID_RESPONSE' }
 type Page = 'overview' | 'workstreams' | 'prs' | 'api'
 
 const URL = '/platform/v1/dashboard/openbao'
@@ -45,6 +48,9 @@ export function OpenBaoReadiness() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
   const [apiCheck, setApiCheck] = useState<string | null>(null)
+  const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null)
+  const [healthError, setHealthError] = useState<string | null>(null)
+  const [probing, setProbing] = useState(false)
   const [requestId, setRequestId] = useState(0)
 
   const load = useCallback(async () => {
@@ -82,6 +88,22 @@ export function OpenBaoReadiness() {
     } finally { setChecking(false) }
   }
 
+  const probeHealth = async () => {
+    setProbing(true)
+    setHealthStatus(null)
+    setHealthError(null)
+    try {
+      const result = await mcJson('/platform/v1/dashboard/openbao/health') as HealthStatus
+      if (!result || !['OBSERVED', 'NOT_CONFIGURED', 'CONFIG_REJECTED', 'UNAVAILABLE', 'INVALID_RESPONSE'].includes(result.state)) {
+        throw new Error('OpenBao health contract mismatch')
+      }
+      setHealthStatus(result)
+    } catch (err) {
+      setHealthError(err instanceof Error ? err.message : 'Health endpoint unavailable')
+    } finally {
+      setProbing(false)
+    }
+  }
   const filtered = useMemo(() => (data?.sections || []).filter(section =>
     (section.name + ' ' + section.tasks.map(task => task.task_id + ' ' + task.subarea).join(' '))
       .toLowerCase().includes(query.toLowerCase())
@@ -190,6 +212,28 @@ export function OpenBaoReadiness() {
           {apiCheck && <p role="status" className={'mt-4 flex gap-2 rounded-lg border p-3 text-sm ' + (apiCheck.startsWith('Integration test failed') ? 'border-red-800 bg-red-950 text-red-200' : 'border-emerald-800 bg-emerald-950 text-emerald-200')}>
             {apiCheck.startsWith('Integration test failed') ? <CircleAlert className="h-5 w-5 shrink-0" /> : <CheckCircle2 className="h-5 w-5 shrink-0" />}{apiCheck}
           </p>}
+          <div className="mt-6 border-t border-slate-800 pt-5">
+            <h3 className="font-semibold">OpenBao system health — operator request</h3>
+            <p className="mt-2 text-sm text-slate-400">
+              One server-side, TLS-verified GET to the allowlisted OpenBao /v1/sys/health endpoint. No vault token, secrets, unseal action or mutation.
+              Health observation does not certify staging or production release.
+            </p>
+            <button type="button" disabled={probing} onClick={() => void probeHealth()} className={button + ' mt-4'}>
+              <RefreshCw className={'h-4 w-4 ' + (probing ? 'animate-spin' : '')} /> Probe OpenBao health (read-only)
+            </button>
+            {healthError && <p role="alert" className="mt-3 rounded-lg border border-red-800 bg-red-950 p-3 text-sm text-red-200">Health request failed: {healthError}</p>}
+            {healthStatus && <div role="status" className="mt-3 rounded-lg border border-amber-800 bg-amber-950/30 p-4 text-sm">
+              <strong className="text-amber-200">Health: {healthStatus.state.replaceAll('_', ' ')}</strong>
+              {healthStatus.state === 'OBSERVED'
+                ? <dl className="mt-3 grid grid-cols-2 gap-3 text-slate-200">
+                    <div><dt className="text-xs text-slate-400">Initialized</dt><dd>{healthStatus.initialized ? 'Yes' : 'No'}</dd></div>
+                    <div><dt className="text-xs text-slate-400">Sealed</dt><dd>{healthStatus.sealed ? 'Yes' : 'No'}</dd></div>
+                    <div><dt className="text-xs text-slate-400">Standby</dt><dd>{healthStatus.standby == null ? 'Unknown' : healthStatus.standby ? 'Yes' : 'No'}</dd></div>
+                    <div><dt className="text-xs text-slate-400">HTTP response</dt><dd>{healthStatus.http_status}</dd></div>
+                  </dl>
+                : <p className="mt-2 text-slate-300">A verified runtime observation is unavailable. Check the server-side allowlist and private TLS connection.</p>}
+            </div>}
+          </div>
         </section>}
       </>}
     </div>
