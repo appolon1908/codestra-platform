@@ -62,3 +62,19 @@ describe('Mission Control interaction flow', () => {
     await waitFor(()=>expect(mock.json).toHaveBeenCalledWith(expect.stringContaining('/tasks?repository=Kong')))
   })
 })
+
+
+it('does not misrepresent missing GitHub PR authority as zero open PRs', async () => {
+  const missing={...repositories[0],open_prs:null,ci_state:'UNVERIFIED'}
+  mock.json.mockImplementation(async(path: string) => {
+    if(path.endsWith('/repositories')) return {repositories:[missing]}
+    if(path.endsWith('/agents')) return {agents:[]}
+    if(path.includes('/tasks?')) return {tasks:[]}
+    if(path.includes('/local-work')) return {lanes:[]}
+    return {task:null}
+  })
+  render(<MissionControl/>)
+  fireEvent.click(screen.getByRole('button',{name:'PR Control'}))
+  await screen.findByText(/1 repositories have unverified PR counts/)
+  expect(screen.getByText('Not verified')).toBeTruthy()
+})
