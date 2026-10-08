@@ -13,6 +13,7 @@ import { PlatformAdminOverview } from '@/routes/platform-admin/PlatformAdminOver
 import { PlatformAdminTenants } from '@/routes/platform-admin/PlatformAdminTenants'
 import { NotAuthorized } from '@/routes/NotAuthorized'
 import { MissionControl } from '@/routes/MissionControl'
+import { OpenBaoReadiness } from '@/routes/OpenBaoReadiness'
 
 function RootRedirect() {
   const { session } = useAuth()
@@ -23,6 +24,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/mission-control" element={<MissionControl />} />
+      <Route path="/mission-control/openbao" element={<OpenBaoReadiness />} />
       <Route path="/sign-in" element={<SignInPage />} />
       <Route path="/not-authorized" element={<NotAuthorized />} />
 
