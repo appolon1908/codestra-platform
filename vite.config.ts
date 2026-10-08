@@ -15,6 +15,14 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
+  // Development browser uses same-origin URLs; only Vite talks to localhost.
+  server: {
+    proxy: {
+      '/platform/v1': {target: 'http://127.0.0.1:8790', changeOrigin: true},
+      '/api/v1': {target: 'http://127.0.0.1:8790', changeOrigin: true},
+      '/mission-control/ws': {target: 'ws://127.0.0.1:8791', ws: true, changeOrigin: true, rewrite: (path) => path.replace(/^\/mission-control\/ws/, '') || '/'},
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,
