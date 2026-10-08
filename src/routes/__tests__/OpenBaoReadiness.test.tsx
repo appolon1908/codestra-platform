@@ -36,6 +36,10 @@ beforeEach(() => {
   fetchJson.mockImplementation(async path => {
     if (path === '/platform/v1/dashboard/openbao') return snapshot
     if (path === '/platform/v1/dashboard/health') return { status: 'ok' }
+    if (path === '/platform/v1/dashboard/openbao/health') return {
+      state: 'OBSERVED', initialized: true, sealed: true, standby: false, http_status: 503,
+      observed_at: '2026-10-08T20:01:00Z',
+    }
     if (path === '/platform/v1/dashboard/contract') return {
       endpoints: { openbao: { path: '/platform/v1/dashboard/openbao' } },
     }
@@ -64,6 +68,10 @@ describe('OpenBao read-only frontend ↔ API flow', () => {
     await user.click(screen.getByRole('button', { name: /Verify backend \+ contract/i }))
     expect(await screen.findByText(/Backend reachable/)).toBeInTheDocument()
     expect(fetchJson).toHaveBeenCalledWith('/platform/v1/dashboard/contract')
+    await user.click(screen.getByRole('button', { name: /Probe OpenBao health \(read-only\)/i }))
+    expect(await screen.findByText('Health: OBSERVED')).toBeInTheDocument()
+    expect(screen.getByText('503')).toBeInTheDocument()
+    expect(fetchJson).toHaveBeenCalledWith('/platform/v1/dashboard/openbao/health')
     await user.click(screen.getByRole('button', { name: /Pull requests/i }))
     expect(screen.getByRole('link', { name: /View GitHub PRs/i })).toHaveAttribute('rel', 'noopener noreferrer')
   })
