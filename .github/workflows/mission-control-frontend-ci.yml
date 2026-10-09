@@ -1,0 +1,32 @@
+name: Codestra Platform Frontend CI
+on:
+  pull_request:
+    branches: [development, testing, staging, production, main]
+  push:
+    branches: [development]
+permissions:
+  contents: read
+jobs:
+  build-test:
+    name: frontend-build-and-interaction
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source without credentials
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Configure pinned Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.22.0'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and Vite build
+        run: npm run build
+      - name: Lint source
+        run: npm run lint
+      - name: Frontend and Mission Control tests
+        run: npm run test -- --maxWorkers=2 --no-file-parallelism
